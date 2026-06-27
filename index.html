@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Simulador de Impacto Sísmico Nacional - Tinaquillo, Cojedes</title>
+    
+    <!-- Tailwind CSS para interfaz fluida adaptable -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Leaflet.js para motor cartográfico -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <!-- Tipografía Inter para alta legibilidad -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Iconografía sismológica -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #121214;
+            color: #f3f4f6;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* Barras de desplazamiento personalizadas */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #16161a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #ff6600;
+            border-radius: 3px;
+        }
+        /* Controles táctiles de precisión para smartphones */
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            background: #2a2a35;
+            height: 10px;
+            border-radius: 5px;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #ff6600;
+            cursor: pointer;
+            box-shadow: 0 0 12px rgba(255, 102, 0, 0.6);
+            transition: transform 0.1s ease, background-color 0.1s ease;
+        }
+        input[type="range"]::-webkit-slider-thumb:active {
+            transform: scale(1.3);
+            background: #ff8833;
+        }
+        /* Integración estética de Leaflet */
+        .leaflet-container {
+            background: #121214 !important;
+        }
+        .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+            background-color: #1a1a22 !important;
+            color: #f3f4f6 !important;
+            border: 1px solid rgba(255, 102, 0, 0.3);
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+        }
+        .leaflet-popup-close-button {
+            color: #ff6600 !important;
+            font-size: 14px !important;
+            padding: 4px !important;
+        }
+        /* Animación para ondas de choque en epicentro */
+        @keyframes pulse-shockwave {
+            0% { transform: scale(0.9); opacity: 0.6; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+        .shockwave {
+            animation: pulse-shockwave 2.2s infinite cubic-bezier(0.215, 0.610, 0.355, 1);
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden select-none">
+
+    <header class="bg-[#16161a] border-b border-gray-800 py-3 px-4 flex justify-between items-center z-30 shrink-0 shadow-md">
+        <div class="flex items-center space-x-3">
+            <div class="bg-[#ff6600] text-white p-2 rounded-xl shadow-md flex items-center justify-center">
+                <i class="fa-solid fa-house-crack text-lg animate-pulse"></i>
+            </div>
+            <div>
+                <h1 class="text-xs md:text-base font-extrabold text-white tracking-tight flex items-center gap-1.5">
+                    SISMICIDAD VENEZUELA <span class="text-[#ff6600] text-[9px] px-1.5 py-0.5 rounded bg-[#ff6600]/15 border border-[#ff6600]/30 font-mono">FUNVISIS / COVENIN</span>
+                </h1>
+                <p class="text-[10px] text-gray-400 hidden sm:block">Simulación Física de Atenuación y Directividad de Ondas Sísmicas</p>
+                <p class="text-[10px] text-gray-400 block sm:hidden">Simulador de Impacto Nacional</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-3 text-[10px] font-mono text-gray-400">
+            <span class="hidden md:flex items-center gap-1.5"><i class="fa-solid fa-circle text-red-500 animate-ping text-[6px]"></i> Monitoreo Geofísico Activo</span>
+            <span class="hidden lg:inline border-l border-gray-700 h-4"></span>
+            <span class="bg-gray-800/60 px-2 py-1 rounded border border-gray-700/50">Simulador Multivariable</span>
+        </div>
+    </header>
+
+    <main class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+        
+        <!-- Panel Lateral Izquierdo (Móvil: Ocultable mediante tabs, Escritorio: Siempre visible) -->
+        <aside id="sidebarPanel" class="absolute inset-x-0 top-0 bottom-16 md:bottom-0 md:relative md:flex w-full md:w-[450px] lg:w-[490px] bg-[#16161a] border-b md:border-b-0 md:border-r border-gray-800 flex-col z-20 overflow-hidden hidden">
+            
+            <div class="flex-1 overflow-y-auto p-4 md:p-5 space-y-4 pb-20 md:pb-5">
+                
+                <!-- SECCIÓN 1: CONTROLES DE PARÁMETROS -->
+                <section id="mobileSectionSettings" class="block space-y-4">
+                    <div class="bg-[#1e1e24] p-4 rounded-xl border border-gray-800 shadow-sm relative overflow-hidden">
+                        <div class="absolute top-0 right-0 w-20 h-20 bg-[#ff6600]/5 rounded-full filter blur-xl"></div>
+                        
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xs font-bold uppercase tracking-wider text-[#ff6600] flex items-center gap-2">
+                                <i class="fa-solid fa-sliders"></i> Parámetros de Simulación
+                            </h2>
+                            <button id="btnReset" class="text-[11px] bg-[#ff6600]/10 hover:bg-[#ff6600] hover:text-white text-gray-300 font-semibold py-1 px-2.5 rounded-lg border border-[#ff6600]/30 transition-all flex items-center gap-1.5 active:scale-95" title="Restablecer valores del 24-06-2026">
+                                <i class="fa-solid fa-rotate-left"></i> Restablecer 24-06
+                            </button>
+                        </div>
+
+                        <!-- Deslizador de Magnitud (Mw) -->
+                        <div class="mb-5">
+                            <div class="flex justify-between items-center mb-2">
+                                <label for="slideMag" class="text-xs font-semibold text-gray-300">Magnitud Sísmica (M<sub>w</sub>)</label>
+                                <span id="valMag" class="text-xs font-bold text-white bg-[#ff6600] px-2.5 py-0.5 rounded-full font-mono shadow-sm">7.5 M<sub>w</sub></span>
+                            </div>
+                            <input type="range" id="slideMag" min="6.0" max="9.5" step="0.1" value="7.5" class="w-full cursor-pointer">
+                            <div class="flex justify-between text-[9px] text-gray-500 mt-1.5 px-0.5">
+                                <span>6.0 Mw (Precursor)</span>
+                                <span>7.5 Mw (Real 2026)</span>
+                                <span>9.5 Mw (Máximo)</span>
+                            </div>
+                        </div>
+
+                        <!-- Selector de Profundidad -->
+                        <div class="mb-4">
+                            <label for="selectDepth" class="block text-xs font-semibold text-gray-300 mb-1.5">Foco / Rango de Profundidad (h)</label>
+                            <div class="relative">
+                                <select id="selectDepth" class="w-full bg-[#16161a] border border-gray-700 rounded-lg py-2.5 px-3 text-xs text-white focus:outline-none focus:border-[#ff6600] cursor-pointer appearance-none">
+                                    <option value="1.0" selected>Muy Superficial (0-10 km) - Amplificación Máxima (F: 1.0)</option>
+                                    <option value="0.85">Poco Profundo (11-30 km) - Atenuación Baja (F: 0.85)</option>
+                                    <option value="0.5">Profundo (31-70 km) - Atenuación Media (F: 0.5)</option>
+                                    <option value="0.1">Muy Profundo (>70 km) - Atenuación Alta (F: 0.1)</option>
+                                </select>
+                                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-400">
+                                    <i class="fa-solid fa-chevron-down text-xs"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Selector de Epicentro -->
+                        <div>
+                            <label for="selectEpicenter" class="block text-xs font-semibold text-gray-300 mb-1.5">Epicentro del Evento Simulado</label>
+                            <div class="relative">
+                                <select id="selectEpicenter" class="w-full bg-[#16161a] border border-gray-700 rounded-lg py-2.5 px-3 text-xs text-white focus:outline-none focus:border-[#ff6600] cursor-pointer appearance-none">
+                                    <option value="Moron" selected>Morón (Costa Central) - Caso Real 24 de Junio</option>
+                                    <option value="Tinaquillo">Tinaquillo (Sobre Falla Boconó - Trazo Central)</option>
+                                    <option value="SanCarlos">San Carlos (Capital Cojedes - Zona Suroeste)</option>
+                                    <option value="Personalizado" disabled>Personalizado (Toca sobre el mapa para reubicar)</option>
+                                </select>
+                                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-400">
+                                    <i class="fa-solid fa-chevron-down text-xs"></i>
+                                </div>
+                            </div>
+                            <p class="text-[9px] text-gray-500 mt-2 italic"><i class="fa-solid fa-circle-info"></i> Puedes reubicar libremente el epicentro tocando cualquier parte de Venezuela en el mapa.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- SECCIÓN 2: ALERTA SÍSMICA Y DIAGNÓSTICO -->
+                <section id="mobileSectionData" class="block space-y-4">
+                    
+                    <!-- Tarjeta de Diagnóstico Dinámico para Tinaquillo -->
+                    <div class="space-y-2">
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+                            <i class="fa-solid fa-triangle-exclamation text-[#ff6600]"></i> Diagnóstico Dinámico: Tinaquillo
+                        </h3>
+                        <div id="tinaquilloAlertBox" class="p-4 rounded-xl border flex flex-col justify-between transition-all duration-300 shadow-md">
+                            <div class="flex items-start space-x-3">
+                                <div id="alertIcon" class="p-2.5 rounded-xl text-white shrink-0 flex items-center justify-center">
+                                    <!-- Icono dinámico -->
+                                </div>
+                                <div class="space-y-1">
+                                    <h4 id="alertTitle" class="text-xs md:text-sm font-extrabold tracking-tight">Evaluando amenaza...</h4>
+                                    <p id="alertDesc" class="text-[11px] text-gray-300 leading-relaxed"></p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-white/10 text-center font-mono">
+                                <div class="bg-black/20 p-1.5 rounded-lg">
+                                    <span class="block text-[8px] text-gray-400 uppercase">Distancia Epicentral</span>
+                                    <span id="tinaquilloDist" class="text-xs font-bold text-white">- km</span>
+                                </div>
+                                <div class="bg-black/20 p-1.5 rounded-lg">
+                                    <span class="block text-[8px] text-gray-400 uppercase">Radio Crítico</span>
+                                    <span id="criticalRadiusLabel" class="text-xs font-bold text-white">- km</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Comportamiento de Materiales según COVENIN / FUNVISIS -->
+                    <div class="bg-[#1e1e24] p-4 rounded-xl border border-gray-800 shadow-sm space-y-3">
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-[#ff6600] flex items-center gap-2">
+                            <i class="fa-solid fa-layer-group"></i> Comportamiento de Materiales en el Epicentro
+                        </h3>
+                        
+                        <div class="space-y-2.5">
+                            <!-- Colapso / Vulnerabilidad -->
+                            <div class="bg-red-950/20 border border-red-900/30 p-3 rounded-lg flex items-start space-x-2.5">
+                                <div class="text-red-500 mt-0.5"><i class="fa-solid fa-circle-xmark text-sm"></i></div>
+                                <div>
+                                    <h4 class="text-[10px] font-extrabold text-red-400 uppercase tracking-wider">Sistemas Vulnerables (Riesgo Alto de Falla)</h4>
+                                    <p id="txtVulnerable" class="text-[11px] text-gray-300 mt-0.5 leading-relaxed">Cargando...</p>
+                                </div>
+                            </div>
+
+                            <!-- Supervivencia / Refuerzo COVENIN -->
+                            <div class="bg-green-950/20 border border-green-900/30 p-3 rounded-lg flex items-start space-x-2.5">
+                                <div class="text-green-500 mt-0.5"><i class="fa-solid fa-shield-halved text-sm"></i></div>
+                                <div>
+                                    <h4 class="text-[10px] font-extrabold text-green-400 uppercase tracking-wider">Métodos de Refuerzo Normados (FUNVISIS/COVENIN)</h4>
+                                    <p id="txtResilient" class="text-[11px] text-gray-300 mt-0.5 leading-relaxed">Cargando...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tabla de Impacto por Municipios y Localidades nacionales -->
+                    <div class="bg-[#1e1e24] p-4 rounded-xl border border-gray-800 shadow-sm">
+                        <div class="flex justify-between items-center mb-3">
+                            <h3 class="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+                                <i class="fa-solid fa-city"></i> Impacto en Localidades Clave (Ordenado por Cercanía)
+                            </h3>
+                            <span class="text-[8px] bg-gray-800 px-1.5 py-0.5 rounded text-gray-400 font-mono">Física de Directividad</span>
+                        </div>
+                        <div class="overflow-x-auto max-h-[220px] overflow-y-auto pr-1">
+                            <table class="w-full text-left border-collapse text-xs font-mono">
+                                <thead>
+                                    <tr class="border-b border-gray-800 text-gray-400 text-[9px] uppercase">
+                                        <th class="pb-1.5 font-semibold">Municipio/Ciudad</th>
+                                        <th class="pb-1.5 font-semibold text-right">Riesgo Local</th>
+                                        <th class="pb-1.5 font-semibold text-right">Distancia</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="citiesTableBody" class="divide-y divide-gray-800 text-gray-300">
+                                    <!-- Generado dinámicamente -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Referencias Científicas Oficiales -->
+                    <div class="p-3 rounded-xl border border-gray-800 bg-[#121214] text-[10px] space-y-2">
+                        <h4 class="font-bold text-[#ff6600] uppercase tracking-wider text-[9px] flex items-center gap-1">
+                            <i class="fa-solid fa-book-bookmark"></i> Referencias del Marco Sísmico Nacional
+                        </h4>
+                        <div class="space-y-2 text-gray-400 leading-relaxed italic">
+                            <p class="border-l border-gray-700 pl-2">
+                                "Una de las mayores fuentes de vulnerabilidad en Venezuela la constituyen las edificaciones construidas hace varias décadas con criterios de diseño considerablemente menos exigentes..." (Hernández & López, 2013).
+                            </p>
+                            <p class="border-l border-gray-700 pl-2">
+                                "La planificación es la mejor herramienta para hacerles frente... Invertir en el SSATV es apostar por el futuro de una Venezuela sismorresistente." (FUNVISIS, 2025).
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Pie de página integrado con descargo de responsabilidad oficial -->
+                    <footer class="pt-2 text-gray-500">
+                        <div class="bg-black/30 p-3 rounded-lg border border-gray-800/80 leading-relaxed text-[9px] text-justify font-sans">
+                            <strong class="text-white block mb-1 text-center font-semibold uppercase text-[8px] tracking-wider">Nota Informativa y Descargo de Responsabilidad</strong>
+                            Hecha por Carlos Duarte con apoyo de la IA Gemini de Google. Verifique la información antes de usarla/compartirla. Esta información no pretende sustituir las informaciones de organismos oficiales o de asociaciones autorizadas, ni mi formación profesional está relacionada a este tema. El objeto de esta infografía es ayudar a comprender los eventos sísmicos, a crear una cultura preventiva anti-sísmica que salve vidas (en Japón casi simultáneamente a lo ocurrido en Venezuela, se presentó un evento sísmico de magnitud 6.9 y profundidad 50 kms con cero bajas humanas), y entender el contexto de la ubicación de Tinaquillo entre las principales zonas sísmicas a nivel nacional. Comprender cualquier evento científico es rápidamente factible con el apoyo de la IA. Referencia de datos obtenida y modelada según el <span class="text-gray-300 font-semibold">"DOCUMENTO DE REFERENCIA TÉCNICA PARA INFOGRAFÍA SÍSMICA TINAQUILLO.pdf"</span>.
+                        </div>
+                    </footer>
+                </section>
+
+            </div>
+        </aside>
+
+        <!-- Contenedor del Mapa (Ocupa la pantalla en escritorio, cambia según pestaña en móvil) -->
+        <section id="mapContainer" class="flex-1 h-full w-full relative z-10 block">
+            
+            <!-- HUD Flotante Móvil de Estado Rápido (Exclusivo para Smartphones) -->
+            <div class="absolute top-3 inset-x-3 bg-[#16161a]/95 border border-gray-800 p-2.5 rounded-xl shadow-2xl z-[1000] flex md:hidden items-center justify-between backdrop-blur-md">
+                <div class="flex items-center space-x-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping"></span>
+                    <div>
+                        <div class="text-[9px] uppercase tracking-wider font-extrabold text-[#ff6600]">Efecto de Directividad</div>
+                        <div id="hudTinaquilloStatus" class="text-[10px] font-bold text-white">Calculando...</div>
+                    </div>
+                </div>
+                <div class="text-right font-mono text-[9px] bg-black/40 px-2 py-1 rounded border border-gray-800">
+                    <span id="hudMagDisplay">7.5</span> Mw | <span id="hudDistDisplay">-</span>
+                </div>
+            </div>
+
+            <!-- Div del Mapa Leaflet -->
+            <div id="map" class="w-full h-full"></div>
+
+            <!-- Leyenda Sismológica del Mapa -->
+            <div class="absolute bottom-5 right-3 md:right-5 bg-[#16161a]/95 border border-gray-800 p-3 rounded-xl shadow-2xl z-[1000] text-[10px] font-mono max-w-[220px] backdrop-blur-md">
+                <h4 class="font-bold text-white border-b border-gray-800 pb-1.5 mb-1.5 uppercase tracking-wide flex items-center gap-1">
+                    <i class="fa-solid fa-circle-info text-[#ff6600]"></i> Leyenda Física
+                </h4>
+                <div class="space-y-2">
+                    <div class="flex items-center gap-2">
+                        <div class="w-3 h-3 rounded-full bg-red-600/30 border border-red-600"></div>
+                        <span class="text-gray-300 text-[9px]">PGA &ge; 0.10g: Zona Crítica (Asimétrica)</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-3 h-3 rounded-full bg-orange-500/10 border border-orange-400 border-dashed"></div>
+                        <span class="text-gray-300 text-[9px]">Frontera de Riesgo (+30 km)</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-3.5 h-3.5 rounded-full bg-[#ff6600] flex items-center justify-center text-white text-[8px] font-bold">★</div>
+                        <span class="text-gray-300 text-[9px]">Epicentro Activo</span>
+                    </div>
+                    <div class="border-t border-gray-800 pt-1.5 mt-1.5 text-gray-500 text-[8px] leading-snug">
+                        *Nota: Los polígonos del mapa muestran la atenuación física real afectada por la directividad de falla y la geología local.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Barra de Navegación Móvil (Estilo App Nativa) -->
+    <nav class="bg-[#16161a] border-t border-gray-800 h-16 flex md:hidden items-center justify-around z-30 shrink-0 font-sans shadow-lg">
+        <button onclick="setMobileTab('map')" id="tabBtnMap" class="flex flex-col items-center justify-center flex-1 h-full text-[#ff6600] transition-colors">
+            <i class="fa-solid fa-map-location-dot text-lg"></i>
+            <span class="text-[9px] mt-1 font-semibold">Ver Mapa</span>
+        </button>
+        
+        <button onclick="setMobileTab('settings')" id="tabBtnSettings" class="flex flex-col items-center justify-center flex-1 h-full text-gray-400 transition-colors">
+            <i class="fa-solid fa-sliders text-lg"></i>
+            <span class="text-[9px] mt-1 font-semibold">Ajustes</span>
+        </button>
+        
+        <button onclick="setMobileTab('data')" id="tabBtnData" class="flex flex-col items-center justify-center flex-1 h-full text-gray-400 transition-colors">
+            <i class="fa-solid fa-chart-line text-lg"></i>
+            <span class="text-[9px] mt-1 font-semibold">Análisis</span>
+        </button>
+    </nav>
+
+    <script>
+        // Catálogo extendido de localidades de Venezuela a lo largo de las Fallas Principales (Boconó, San Sebastián y El Pilar)
+        const REGIONAL_MARKERS = {
+            "Tinaquillo": { coords: [9.9186, -68.3047], soilFactor: 1.4, desc: "Falla Boconó (Zona Sísmica 5) - Tinaquillo" },
+            "Tinaco": { coords: [9.7039, -68.4356], soilFactor: 1.5, desc: "Inclusión de Control - Cojedes" },
+            "San Carlos": { coords: [9.6612, -68.5827], soilFactor: 1.5, desc: "Capital del Estado Cojedes" },
+            "Caracas": { coords: [10.4806, -66.9036], soilFactor: 2.0, desc: "Valle de Caracas - Cuenca Sedimentaria Profunda (Efecto Gelatina)" },
+            "Maiquetía / La Guaira": { coords: [10.6012, -66.9536], soilFactor: 1.8, desc: "Litoral Costero - Aluvión Joven (Efecto Gelatina)" },
+            "Tocuyito": { coords: [10.1011, -68.0822], soilFactor: 1.3, desc: "Municipio Libertador - Carabobo" },
+            "Valencia": { coords: [10.1620, -68.0077], soilFactor: 1.6, desc: "Cuenca del Lago - Carabobo" },
+            "Naguanagua": { coords: [10.2544, -68.0125], soilFactor: 1.4, desc: "Valle del Cabriales - Carabobo" },
+            "San Diego": { coords: [10.2500, -67.9333], soilFactor: 1.7, desc: "Valle de San Diego - Carabobo" },
+            "Guacara": { coords: [10.2255, -67.8786], soilFactor: 1.5, desc: "Eje Oriental de Carabobo" },
+            "Maracay": { coords: [10.2442, -67.6066], soilFactor: 1.6, desc: "Depresión del Lago de Valencia - Aragua" },
+            "Nirgua": { coords: [10.1558, -68.5653], soilFactor: 1.2, desc: "Macizo Montañoso - Yaracuy" },
+            "San Felipe": { coords: [10.3399, -68.7418], soilFactor: 1.5, desc: "Valle del Yaracuy - Falla Boconó" },
+            "Puerto Cabello / Morón": { coords: [10.4800, -68.0100], soilFactor: 1.5, desc: "Litoral Oeste - Carabobo" },
+            "Mérida": { coords: [8.5983, -71.1449], soilFactor: 1.5, desc: "Zona Andina - Trazo Activo Falla Boconó" },
+            "Cumaná": { coords: [10.4530, -64.1826], soilFactor: 1.9, desc: "Suelos del Golfo - Falla El Pilar" }
+        };
+
+        // Epicentros de control históricos o estratégicos
+        const EPICENTERS = {
+            "Moron": [10.4800, -68.0100],
+            "Tinaquillo": [9.9186, -68.3047],
+            "SanCarlos": [9.6612, -68.5827],
+            "Personalizado": null
+        };
+
+        // Inicialización exacta para recrear las condiciones reales del 24 de Junio de 2026
+        let simState = {
+            magnitude: 7.5,
+            depthFactor: 1.0, 
+            epicenterName: "Moron",
+            epicenterCoords: [10.4800, -68.0100]
+        };
+
+        let activeMobileTab = 'map';
+
+        // Configuración inicial del mapa sobre la zona norte de Cojedes y Carabobo
+        const map = L.map('map', {
+            zoomControl: false,
+            attributionControl: true
+        }).setView([10.1500, -68.1500], 8);
+
+        L.control.zoom({ position: 'topright' }).addTo(map);
+
+        // Capa base táctica en modo oscuro
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            maxZoom: 18
+        }).addTo(map);
+
+        // Capas cartográficas dinámicas
+        let epicenterMarker = null;
+        let redDamagePolygon = null;
+        let orangeFronteraPolygon = null;
+        let cityMapMarkers = {};
+
+        // Cálculo dinámico del Rumbo (Bearing) entre el epicentro y la localidad para el efecto de directividad
+        function calculateBearing(lat1, lon1, lat2, lon2) {
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const lat1Rad = lat1 * Math.PI / 180;
+            const lat2Rad = lat2 * Math.PI / 180;
+            const y = Math.sin(dLon) * Math.cos(lat2Rad);
+            const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
+            let brng = Math.atan2(y, x) * 180 / Math.PI;
+            return (brng + 360) % 360;
+        }
+
+        // Proyección geográfica inversa (Polar a Lat/Lng) para dibujar ondas asimétricas perfectas
+        function getLatLngAtDistanceAndBearing(center, distMeters, bearingDegrees) {
+            const R_EARTH = 6378137; // Radio ecuatorial de la Tierra
+            const lat1 = center[0] * Math.PI / 180;
+            const lon1 = center[1] * Math.PI / 180;
+            const brng = bearingDegrees * Math.PI / 180;
+            
+            const lat2 = Math.asin(Math.sin(lat1) * Math.cos(distMeters / R_EARTH) +
+                         Math.cos(lat1) * Math.sin(distMeters / R_EARTH) * Math.cos(brng));
+            const lon2 = lon1 + Math.atan2(Math.sin(brng) * Math.sin(distMeters / R_EARTH) * Math.cos(lat1),
+                         Math.cos(distMeters / R_EARTH) - Math.sin(lat1) * Math.sin(lat2));
+            
+            return [lat2 * 180 / Math.PI, lon2 * 180 / Math.PI];
+        }
+
+        // Cálculo del Radio Crítico Teórico (Meters). Base: Mw 6.0 = 18km; Mw 7.5 = 95km
+        function calculateCriticalRadius(mw, depthFactor) {
+            const baseRadius = 18000; 
+            const k = 1.109; 
+            const scaledRadius = baseRadius * Math.exp(k * (mw - 6.0));
+            return scaledRadius * depthFactor;
+        }
+
+        // Lógica de Comportamiento de Materiales y Elementos Estructurales ante Sismos (COVENIN / FUNVISIS)
+        function updateMaterialAnalysis(mw, depthFactor) {
+            const elVulnerable = document.getElementById('txtVulnerable');
+            const elResilient = document.getElementById('txtResilient');
+            const isSuperficial = depthFactor >= 0.85;
+
+            if (mw >= 6.0 && mw < 6.5) {
+                if (isSuperficial) {
+                    elVulnerable.innerText = "Sistemas construidos con adobe, tapia y bahareque de los centros coloniales. Desprendimiento de tejas y agrietamientos de fachadas tradicionales.";
+                    elResilient.innerText = "Adición de mallas electrosoldadas ancladas mediante pasadores transversales, recubiertas con mortero rico en cemento.";
+                } else {
+                    elVulnerable.innerText = "Sin colapsos previsibles. Fisuras menores e imperceptibles en tabiquería ligera sin función estructural.";
+                    elResilient.innerText = "No se requieren acciones de refuerzo estructural de emergencia ante disipaciones profundas.";
+                }
+            } else if (mw >= 6.5 && mw < 7.0) {
+                if (isSuperficial) {
+                    elVulnerable.innerText = "Paredes divisorias de bloques de arcilla hueca o tabelones en viviendas de autoconstrucción (sin confinamiento de vigas de corona y machones).";
+                    elResilient.innerText = "Implementación obligatoria de confinamiento perimetral con perfiles metálicos y vigas de amarre según Norma COVENIN 1756.";
+                } else {
+                    elVulnerable.innerText = "Ranchos e infraestructuras autoconstruidas en laderas inestables o sobre rellenos mal compactados.";
+                    elResilient.innerText = "Estabilización del terreno de fundación a través de muros de gravedad y anclajes pasivos al sustrato rocoso.";
+                }
+            } else if (mw >= 7.0 && mw < 7.5) {
+                if (isSuperficial) {
+                    elVulnerable.innerText = "Edificaciones de concreto armado previas a la actualización de 1982. Estructuras con columnas cortas y plantas libres vulnerables en planta baja (Piso Blando).";
+                    elResilient.innerText = "Encamisado de columnas (chaquetado de acero o recubrimiento con fibra de carbono CFRP). Introducción de pantallas de concreto armado en la base.";
+                } else {
+                    elVulnerable.innerText = "Mampostería armada deteriorada y losas de tabelón mal vinculadas con sus elementos de apoyo.";
+                    elResilient.innerText = "Reforzamiento de conexiones losa-columna e inyección de lechadas estructurales de alta resistencia (grout).";
+                }
+            } else if (mw >= 7.5 && mw < 8.0) {
+                if (isSuperficial) {
+                    elVulnerable.innerText = "Condiciones del Sismo Real 24-06-2026: Colapso de losas en construcciones multifamiliares informales de varios niveles, fallas por cortante en juntas de pórticos.";
+                    elResilient.innerText = "Instalación de marcos de acero con disipación cruzada (Cruces de San Andrés) y sustitución de elementos portantes dañados mediante micropilotes.";
+                } else {
+                    elVulnerable.innerText = "Estructuras comerciales con asimetrías de rigidez geométrica o torsión en elevaciones.";
+                    elResilient.innerText = "Sistemas mecánicos de disipación de energía y amortiguación acoplada en uniones de pórticos principales.";
+                }
+            } else if (mw >= 8.0 && mw < 9.0) {
+                if (isSuperficial) {
+                    elVulnerable.innerText = "Grandes puentes, viaductos elevados en autopistas troncales, naves industriales de gran luz y muelles portuarios sin cimentación de pilotes profundos.";
+                    elResilient.innerText = "Reemplazo de apoyos convencionales por aisladores elastoméricos con núcleo de plomo de base sísmica y amortiguadores viscosos.";
+                } else {
+                    elVulnerable.innerText = "Mampostería confinada construida en valles aluviales profundos propensos a la licuación de arenas.";
+                    elResilient.innerText = "Consolidación profunda de suelos mediante inyección por compactación y reconstrucción estructural con pórticos sismorresistentes de alta ductilidad.";
+                }
+            } else {
+                elVulnerable.innerText = "Fuerzas inerciales extremas: Colapso destructivo casi total de mampostería tradicional y deformaciones plásticas insalvables en concreto estándar.";
+                elResilient.innerText = "Diseño estructural avanzado bajo el Nivel de Diseño 3 (ND3) de COVENIN. Reubicación de la población fuera de zonas de fallas geológicas activas.";
+            }
+        }
+
+        // Renderizado general y evaluación de física sismológica
+        function renderSimulation() {
+            // 1. OBTENER VARIABLES SISMOLÓGICAS DE CONTROL
+            const rCritical = calculateCriticalRadius(simState.magnitude, simState.depthFactor); 
+
+            // 2. ACTUALIZACIÓN DEL MARCADOR DE EPICENTRO ACTIVO
+            if (epicenterMarker) {
+                map.removeLayer(epicenterMarker);
+            }
+
+            const starIcon = L.divIcon({
+                className: 'custom-epicenter-marker',
+                html: `<div class="relative w-10 h-10 flex items-center justify-center">
+                         <span class="absolute inline-flex h-full w-full rounded-full bg-[#ff6600] opacity-50 shockwave"></span>
+                         <span class="relative rounded-full h-5 w-5 bg-[#ff6600] border-2 border-white shadow-lg flex items-center justify-center text-white text-[9px] font-bold">★</span>
+                       </div>`,
+                iconSize: [40, 40],
+                iconAnchor: [20, 20]
+            });
+
+            epicenterMarker = L.marker(simState.epicenterCoords, { icon: starIcon }).addTo(map);
+            epicenterMarker.bindPopup(`
+                <div class="text-xs font-sans">
+                    <strong class="text-[#ff6600] block mb-1">Epicentro Simulado</strong>
+                    <div class="space-y-0.5 text-gray-300 font-mono text-[10px]">
+                        <div>Magnitud: <span class="text-white font-bold">${simState.magnitude} Mw</span></div>
+                        <div>Foco: <span class="text-white font-bold">${simState.depthFactor === 1.0 ? 'Superficial (0-10 km)' : 'Profundo'}</span></div>
+                        <div>Ubicación: <span class="text-white font-bold">${simState.epicenterName === 'Personalizado' ? 'Coordenadas del mapa' : simState.epicenterName}</span></div>
+                    </div>
+                </div>
+            `);
+
+            // 3. GENERACIÓN DE POLÍGONOS DE PROPAGACIÓN ASIMÉTRICA EN TIEMPO REAL (64 EJES COMPASS)
+            if (redDamagePolygon) map.removeLayer(redDamagePolygon);
+            if (orangeFronteraPolygon) map.removeLayer(orangeFronteraPolygon);
+
+            const pointsRed = [];
+            const pointsOrange = [];
+            const isMoronEpicenter = simState.epicenterName === "Moron" || 
+                (map.distance(simState.epicenterCoords, EPICENTERS["Moron"]) < 10000);
+
+            for (let i = 0; i < 64; i++) {
+                const angle = (i * 360) / 64;
+
+                // A. Directividad según el rumbo angular respecto al Este (falla transcurrente)
+                let factorDirectivity = 1.0;
+                if (isMoronEpicenter && simState.magnitude >= 7.2) {
+                    factorDirectivity = 1.0 + (0.55 * Math.cos((angle - 88) * Math.PI / 180));
+                }
+
+                // B. Interpolación IDW para deducir el coeficiente de suelo local continuo en ese ángulo
+                let numerator = 0;
+                let denominator = 0;
+                for (const cityName in REGIONAL_MARKERS) {
+                    const city = REGIONAL_MARKERS[cityName];
+                    const cityBearing = calculateBearing(
+                        simState.epicenterCoords[0], simState.epicenterCoords[1],
+                        city.coords[0], city.coords[1]
+                    );
+
+                    let diff = Math.abs(angle - cityBearing);
+                    if (diff > 180) diff = 360 - diff;
+
+                    // Mayor ponderación al suelo de las ciudades más alineadas con este ángulo radial
+                    const weight = 1 / (diff * diff + 8); 
+
+                    let currentSoil = city.soilFactor;
+                    if (isMoronEpicenter && simState.magnitude >= 7.2 && city.soilFactor >= 1.8) {
+                        currentSoil *= 1.6; // Efecto Gelatina
+                    }
+
+                    numerator += currentSoil * weight;
+                    denominator += weight;
+                }
+                const interpolatedSoil = denominator > 0 ? (numerator / denominator) : 1.5;
+
+                // C. Radios locales ajustados por directividad y geología
+                const rCritLocal = rCritical * interpolatedSoil * factorDirectivity;
+                const rFrontLocal = rCritLocal + 30000;
+
+                // D. Proyectar distancias a coordenadas espaciales
+                pointsRed.push(getLatLngAtDistanceAndBearing(simState.epicenterCoords, rCritLocal, angle));
+                pointsOrange.push(getLatLngAtDistanceAndBearing(simState.epicenterCoords, rFrontLocal, angle));
+            }
+
+            redDamagePolygon = L.polygon(pointsRed, {
+                color: '#dc2626',
+                fillColor: '#dc2626',
+                fillOpacity: 0.15,
+                weight: 1.8
+            }).addTo(map);
+
+            orangeFronteraPolygon = L.polygon(pointsOrange, {
+                color: '#f97316',
+                fillColor: '#f97316',
+                fillOpacity: 0.05,
+                weight: 1.2,
+                dashArray: '6, 10'
+            }).addTo(map);
+
+            // 4. BUCLE GENERAL DE EVALUACIÓN MULTIVARIABLE (DIRECTIVIDAD Y SITIO) POR LOCALIDAD
+            const tableBody = document.getElementById('citiesTableBody');
+            tableBody.innerHTML = '';
+            
+            let tinaquilloStatus = "ZONA SEGURA";
+            let tinaquilloDistance = 0;
+            let listToRender = [];
+
+            Object.keys(REGIONAL_MARKERS).forEach(cityName => {
+                const city = REGIONAL_MARKERS[cityName];
+                const distanceMeters = map.distance(simState.epicenterCoords, city.coords);
+                const distanceKm = distanceMeters / 1000;
+
+                // A. CÁLCULO DE COEFICIENTES GEOLÓGICOS E HIDROGRÁFICOS INDIVIDUALES
+                const bearing = calculateBearing(
+                    simState.epicenterCoords[0], simState.epicenterCoords[1],
+                    city.coords[0], city.coords[1]
+                );
+
+                let factorDirectivity = 1.0;
+                if (isMoronEpicenter && simState.magnitude >= 7.2) {
+                    factorDirectivity = 1.0 + (0.55 * Math.cos((bearing - 88) * Math.PI / 180));
+                }
+
+                let amplificacionLocal = city.soilFactor;
+                if (isMoronEpicenter && simState.magnitude >= 7.2 && city.soilFactor >= 1.8) {
+                    amplificacionLocal *= 1.6; // Efecto Gelatina
+                }
+
+                // B. REEVALUACIÓN FÍSICA ASIMÉTRICA DE DAÑO LOCAL EN BASE A LA PROPAGACIÓN ONDULATORIA
+                const localCriticalRadius = rCritical * amplificacionLocal * factorDirectivity;
+                const localSafetyRadius = localCriticalRadius + 30000; 
+
+                let statusBadge = "ZONA SEGURA";
+                let badgeClass = "bg-green-500/15 border-green-500/30 text-green-500";
+
+                if (distanceMeters < localCriticalRadius) {
+                    statusBadge = "CRÍTICO";
+                    badgeClass = "bg-red-500/15 border-red-500/30 text-red-500";
+                } else if (distanceMeters < localSafetyRadius) {
+                    statusBadge = "FRONTERA";
+                    badgeClass = "bg-orange-500/15 border-orange-500/30 text-orange-400";
+                }
+
+                if (cityName === "Tinaquillo") {
+                    tinaquilloStatus = statusBadge;
+                    tinaquilloDistance = distanceKm;
+                }
+
+                listToRender.push({
+                    name: cityName,
+                    distance: distanceKm,
+                    status: statusBadge,
+                    badgeClass: badgeClass,
+                    desc: city.desc
+                });
+
+                // C. REPROCESADO VISUAL DE MARCADORES EN EL MAPA EN TIEMPO REAL
+                if (!cityMapMarkers[cityName]) {
+                    cityMapMarkers[cityName] = L.marker(city.coords).addTo(map);
+                }
+
+                let pinColor = '#22c55e'; // Seguro
+                if (statusBadge === 'CRÍTICO') pinColor = '#ef4444'; // Crítico
+                if (statusBadge === 'FRONTERA') pinColor = '#f97316'; // Frontera
+
+                const highlightStyle = (cityName === "Tinaquillo" || cityName === "Tinaco") 
+                    ? 'border-2 border-white' 
+                    : 'border border-gray-700/60';
+
+                const iconHtml = `
+                    <div class="flex items-center space-x-1 bg-black/90 px-1.5 py-0.5 rounded-full shadow-lg ${highlightStyle}">
+                        <span class="w-2 h-2 rounded-full animate-pulse" style="background-color: ${pinColor}"></span>
+                        <span class="text-[8px] text-white font-mono font-bold leading-none">${cityName}</span>
+                    </div>
+                `;
+
+                cityMapMarkers[cityName].setIcon(L.divIcon({
+                    className: 'custom-city-marker',
+                    html: iconHtml,
+                    iconSize: [85, 20],
+                    iconAnchor: [5, 10]
+                }));
+
+                cityMapMarkers[cityName].bindPopup(`
+                    <div class="text-xs font-sans">
+                        <strong class="text-white text-sm block mb-0.5">${cityName}</strong>
+                        <span class="text-gray-400 text-[9px] leading-tight block mb-2">${city.desc}</span>
+                        <div class="border-t border-gray-800 pt-2 space-y-1 font-mono text-[10px]">
+                            <div>Distancia real: <strong class="text-white">${distanceKm.toFixed(1)} km</strong></div>
+                            <div>Factor de Suelo: <strong class="text-white">${city.soilFactor.toFixed(1)}</strong></div>
+                            <div>Directividad Falla: <strong class="text-white">${factorDirectivity.toFixed(2)}x</strong></div>
+                            <div>Aceleración Estimada: <span class="${badgeClass} px-1 rounded font-bold">${statusBadge}</span></div>
+                        </div>
+                    </div>
+                `);
+            });
+
+            // 5. ORDENAR Y POBLAR TABLA DE EXPOSICIÓN LOCAL
+            listToRender.sort((a, b) => a.distance - b.distance);
+            listToRender.forEach(item => {
+                const row = document.createElement('tr');
+                row.className = "hover:bg-gray-800/30 transition-colors";
+                row.innerHTML = `
+                    <td class="py-2 pr-2 text-white font-medium flex flex-col">
+                        <span>${item.name}</span>
+                        <span class="text-[8px] text-gray-500 font-sans mt-0.5">${item.desc}</span>
+                    </td>
+                    <td class="py-2 text-right">
+                        <span class="px-1.5 py-0.5 rounded border text-[8px] font-extrabold uppercase tracking-wide ${item.badgeClass}">${item.status}</span>
+                    </td>
+                    <td class="py-2 text-right font-semibold text-white font-mono">${item.distance.toFixed(1)} km</td>
+                `;
+                tableBody.appendChild(row);
+            });
+
+            // 6. ACTUALIZACIÓN DEL TABLERO DE DIAGNÓSTICO DE TINAQUILLO
+            const tinaAlertBox = document.getElementById('tinaquilloAlertBox');
+            const alertIcon = document.getElementById('alertIcon');
+            const alertTitle = document.getElementById('alertTitle');
+            const alertDesc = document.getElementById('alertDesc');
+            
+            const hudTinaStatus = document.getElementById('hudTinaquilloStatus');
+            const hudMagDisplay = document.getElementById('hudMagDisplay');
+            const hudDistDisplay = document.getElementById('hudDistDisplay');
+
+            document.getElementById('tinaquilloDist').innerText = `${tinaquilloDistance.toFixed(1)} km`;
+            document.getElementById('criticalRadiusLabel').innerText = `${(rCritical / 1000).toFixed(1)} km`;
+
+            hudMagDisplay.innerText = simState.magnitude.toFixed(1);
+            hudDistDisplay.innerText = `${tinaquilloDistance.toFixed(0)} km`;
+
+            if (tinaquilloStatus === "CRÍTICO") {
+                tinaAlertBox.className = "p-4 rounded-xl border border-red-500/30 bg-red-950/20 flex flex-col justify-between transition-all duration-300 shadow-md";
+                alertIcon.className = "p-2.5 rounded-xl text-white bg-red-600 shrink-0 flex items-center justify-center shadow-lg shadow-red-600/20";
+                alertIcon.innerHTML = `<i class="fa-solid fa-house-crack text-lg animate-bounce"></i>`;
+                alertTitle.className = "text-xs md:text-sm font-extrabold tracking-tight text-red-500";
+                alertTitle.innerText = "ALERTA: Tinaquillo dentro de Zona de Desastre Estructural";
+                alertDesc.innerText = "Sujeto a aceleración violenta. Tipologías de mampostería no confinada, bloques de arcilla sin machones y estructuras coloniales sufren daños catastróficos inmediatos.";
+                
+                hudTinaStatus.className = "text-[10px] font-black text-red-500 uppercase";
+                hudTinaStatus.innerText = "DESASTRE CRÍTICO 🚨";
+            } else if (tinaquilloStatus === "FRONTERA") {
+                tinaAlertBox.className = "p-4 rounded-xl border border-orange-500/30 bg-orange-950/20 flex flex-col justify-between transition-all duration-300 shadow-md";
+                alertIcon.className = "p-2.5 rounded-xl text-white bg-orange-600 shrink-0 flex items-center justify-center shadow-lg shadow-orange-600/20";
+                alertIcon.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-lg"></i>`;
+                alertTitle.className = "text-xs md:text-sm font-extrabold tracking-tight text-orange-400";
+                alertTitle.innerText = "PRECAUCIÓN: Tinaquillo en la Frontera Crítica de Daño";
+                alertDesc.innerText = "Ondas sísmicas con energía residual activa. Posibles fisuras y grietas estructurales ligeras en fachadas comerciales de concreto pre-1982 e iglesias históricas.";
+                
+                hudTinaStatus.className = "text-[10px] font-black text-orange-400 uppercase";
+                hudTinaStatus.innerText = "FRONTERA DE RIESGO ⚠️";
+            } else {
+                tinaAlertBox.className = "p-4 rounded-xl border border-green-500/30 bg-green-950/20 flex flex-col justify-between transition-all duration-300 shadow-md";
+                alertIcon.className = "p-2.5 rounded-xl text-white bg-green-600 shrink-0 flex items-center justify-center shadow-lg shadow-green-600/20";
+                alertIcon.innerHTML = `<i class="fa-solid fa-circle-check text-lg"></i>`;
+                alertTitle.className = "text-xs md:text-sm font-extrabold tracking-tight text-green-500";
+                alertTitle.innerText = "ZONA SEGURA: Impacto disipado por distancia";
+                alertDesc.innerText = "Las aceleraciones horizontales han disminuido por debajo del umbral de peligro de la corteza. Las estructuras estables no corren riesgos significativos de daño.";
+                
+                hudTinaStatus.className = "text-[10px] font-black text-green-500 uppercase";
+                hudTinaStatus.innerText = "ZONA SEGURA ✅";
+            }
+
+            updateMaterialAnalysis(simState.magnitude, simState.depthFactor);
+        }
+
+        // Transición y visibilidad de pantallas en smartphones
+        function setMobileTab(tabName) {
+            activeMobileTab = tabName;
+
+            const sidebar = document.getElementById('sidebarPanel');
+            const mapContainer = document.getElementById('mapContainer');
+            
+            const btnMap = document.getElementById('tabBtnMap');
+            const btnSettings = document.getElementById('tabBtnSettings');
+            const btnData = document.getElementById('tabBtnData');
+
+            const sectionSettings = document.getElementById('mobileSectionSettings');
+            const sectionData = document.getElementById('mobileSectionData');
+
+            [btnMap, btnSettings, btnData].forEach(btn => {
+                btn.classList.remove('text-[#ff6600]');
+                btn.classList.add('text-gray-400');
+            });
+
+            if (tabName === 'map') {
+                sidebar.classList.add('hidden');
+                sidebar.classList.remove('flex');
+                mapContainer.classList.add('block');
+                mapContainer.classList.remove('hidden');
+                btnMap.classList.add('text-[#ff6600]');
+                btnMap.classList.remove('text-gray-400');
+
+                setTimeout(() => {
+                    map.invalidateSize();
+                }, 120);
+
+            } else if (tabName === 'settings') {
+                sidebar.classList.remove('hidden');
+                sidebar.classList.add('flex');
+                sectionSettings.classList.remove('hidden');
+                sectionSettings.classList.add('block');
+                sectionData.classList.add('hidden');
+                sectionData.classList.remove('block');
+
+                mapContainer.classList.add('hidden');
+                mapContainer.classList.remove('block');
+                btnSettings.classList.add('text-[#ff6600]');
+                btnSettings.classList.remove('text-gray-400');
+
+            } else if (tabName === 'data') {
+                sidebar.classList.remove('hidden');
+                sidebar.classList.add('flex');
+                sectionSettings.classList.add('hidden');
+                sectionSettings.classList.remove('block');
+                sectionData.classList.remove('hidden');
+                sectionData.classList.add('block');
+
+                mapContainer.classList.add('hidden');
+                mapContainer.classList.remove('block');
+                btnData.classList.add('text-[#ff6600]');
+                btnData.classList.remove('text-gray-400');
+            }
+        }
+
+        // Suscripción de eventos para controles deslizantes
+        const slideMag = document.getElementById('slideMag');
+        const valMag = document.getElementById('valMag');
+        slideMag.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            simState.magnitude = val;
+            valMag.innerHTML = `${val.toFixed(1)} Mw`;
+            renderSimulation();
+        });
+
+        const selectDepth = document.getElementById('selectDepth');
+        selectDepth.addEventListener('change', (e) => {
+            simState.depthFactor = parseFloat(e.target.value);
+            renderSimulation();
+        });
+
+        const selectEpicenter = document.getElementById('selectEpicenter');
+        selectEpicenter.addEventListener('change', (e) => {
+            const epKey = e.target.value;
+            if (EPICENTERS[epKey]) {
+                simState.epicenterName = epKey;
+                simState.epicenterCoords = EPICENTERS[epKey];
+                map.panTo(simState.epicenterCoords);
+                renderSimulation();
+            }
+        });
+
+        // Interacción libre en el mapa para ubicar epicentros personalizados
+        map.on('click', (e) => {
+            const coords = [e.latlng.lat, e.latlng.lng];
+            simState.epicenterCoords = coords;
+            simState.epicenterName = "Personalizado";
+            selectEpicenter.value = "Personalizado";
+            renderSimulation();
+        });
+
+        // Botón Restablecer: Regreso estricto al sismo real del 24 de Junio de 2026
+        const btnReset = document.getElementById('btnReset');
+        btnReset.addEventListener('click', () => {
+            simState.magnitude = 7.5;
+            simState.depthFactor = 1.0;
+            simState.epicenterName = "Moron";
+            simState.epicenterCoords = EPICENTERS["Moron"];
+
+            slideMag.value = 7.5;
+            valMag.innerHTML = "7.5 Mw";
+            selectDepth.value = "1.0";
+            selectEpicenter.value = "Moron";
+
+            map.setView([10.1500, -68.1500], 8);
+            renderSimulation();
+        });
+
+        // Adaptación automática frente a cambios de dimensiones (Responsive)
+        window.addEventListener('resize', () => {
+            const isDesktop = window.innerWidth >= 768;
+            const sidebar = document.getElementById('sidebarPanel');
+            const mapContainer = document.getElementById('mapContainer');
+            const sectionSettings = document.getElementById('mobileSectionSettings');
+            const sectionData = document.getElementById('mobileSectionData');
+
+            if (isDesktop) {
+                sidebar.classList.remove('hidden');
+                sidebar.classList.add('flex');
+                sectionSettings.classList.remove('hidden');
+                sectionSettings.classList.add('block');
+                sectionData.classList.remove('hidden');
+                sectionData.classList.add('block');
+                mapContainer.classList.remove('hidden');
+                mapContainer.classList.add('block');
+            } else {
+                setMobileTab(activeMobileTab);
+            }
+            map.invalidateSize();
+        });
+
+        // Carga inicial de la aplicación
+        window.onload = function() {
+            if (window.innerWidth >= 768) {
+                const sidebar = document.getElementById('sidebarPanel');
+                sidebar.classList.remove('hidden');
+                sidebar.classList.add('flex');
+            } else {
+                setMobileTab('map');
+            }
+            renderSimulation();
+        };
+
+    </script>
+</body>
+</html>
